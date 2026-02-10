@@ -24,16 +24,25 @@ We implemented a Deep Learning model called `SolarAttentionLSTM`.
 - **Attention Mechanism:** A custom attention layer was added. It allows the model to look back at the 24-hour window and identify which specific hour had the most significant impact on the future Dst value.
 - **Output Layer:** The model outputs a vector of 6 values, representing the forecast for the next 6 hours.
 
+![System Architecture](images/architecture.png)
+![Model Architecture](images/model_architecture.png)
+
 ## 6. Training and Optimization
 - **Asymmetric Weighted Loss:** A standard MSE loss often fails to predict rare storm events because it focuses too much on the "quiet" time. We modified the loss function to penalize errors during storm times (Dst < -20) five times more than quiet times.
 - **Regularization:** We used a Dropout rate of 0.4 and Weight Decay to prevent the model from overfitting.
 - **Early Stopping:** Training was stopped automatically when the validation loss stopped improving, ensuring the best possible generalization.
+
+![Training Progress](images/training_plot.png)
 
 ## 7. Results and Discussion
 The model demonstrates a high correlation between the predicted and actual Dst values. 
 - **Forecasting Lead Time:** The model successfully predicts the downward trend of a storm 6 hours before it happens.
 - **Magnitude Accuracy:** Thanks to the weighted loss function, the model is now capable of predicting the peak intensity of storms, which was a major challenge in earlier versions.
 - **Validation:** Visual plots of the "strongest storm" in the validation set show that the model tracks the storm's entry and recovery phases accurately.
+
+![Forecast Plot](images/forecast_plot.png)
+![Scatter Plot](images/scatter_plot.png)
+![Major Storm Prediction](images/major_storm_plot.png)
 
 ## 8. Conclusion
 In this project, we have successfully developed a deep learning-based early warning system for space weather. By combining LSTM networks with attention mechanisms and physics-based features, we have created a tool that provides reliable 6-hour forecasts. This approach proves that deep learning can be a powerful asset in the field of heliophysics.
