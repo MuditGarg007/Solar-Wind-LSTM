@@ -24,7 +24,6 @@ We implemented a Deep Learning model called `SolarAttentionLSTM`.
 - **Attention Mechanism:** A custom attention layer was added. It allows the model to look back at the 24-hour window and identify which specific hour had the most significant impact on the future Dst value.
 - **Output Layer:** The model outputs a vector of 6 values, representing the forecast for the next 6 hours.
 
-![System Architecture](images/architecture.png)
 ![Model Architecture](images/model_architecture.png)
 
 ## 6. Training and Optimization
