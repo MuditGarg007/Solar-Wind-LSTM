@@ -1,0 +1,37 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+.virtual_documents
+*/.ipynb_checkpoints/*
+
+# Data and Large Binaries (Don't track large CSVs or ZIPs)
+archive/
+*.zip
+*.csv
+*.pdf
+
+# Model weights (Large binary files)
+*.pth
+*.pt
+*.h5
+*.joblib
+
+# OS Metadata
+.DS_Store
+Thumbs.db
+
+# Optional: Ignore generated plots if you want them to be recreated by code
+# If you want to keep your specific plots for documentation, comment these out:
+# *.png
+# *.jpg
