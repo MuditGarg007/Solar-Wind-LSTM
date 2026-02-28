@@ -38,6 +38,10 @@ The model demonstrates a high correlation between the predicted and actual Dst v
 - **Forecasting Lead Time:** The model successfully predicts the downward trend of a storm 6 hours before it happens.
 - **Magnitude Accuracy:** Thanks to the weighted loss function, the model is now capable of predicting the peak intensity of storms, which was a major challenge in earlier versions.
 - **Validation:** Visual plots of the "strongest storm" in the validation set show that the model tracks the storm's entry and recovery phases accurately.
+- **RMSE:** 9.5449 nT
+- **Pearson Correlation:** 0.6436
+- **R-Squared:** 0.2527
+
 
 ![Forecast Plot](images/forecast_plot.png)
 ![Scatter Plot](images/scatter_plot.png)
