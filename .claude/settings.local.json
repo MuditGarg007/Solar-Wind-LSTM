@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(py *)",
+      "Bash(where python *)",
+      "Bash(where python3 *)",
+      "Bash(conda --version)",
+      "Bash(pip --version)",
+      "Bash(conda run *)",
+      "Bash(conda activate *)",
+      "Bash(python -c \"import pandas; print\\(pandas.__version__\\)\")",
+      "Bash(C:/Anaconda/python.exe -c \"import pandas; print\\(pandas.__version__\\)\")",
+      "Bash(C:/Anaconda/python.exe *)",
+      "Bash(C:/Anaconda/envs/*/python.exe -c \"import lightgbm; print\\(lightgbm.__version__\\)\")",
+      "Bash(C:/Anaconda/envs/nasa/python.exe -c ' *)",
+      "Bash(C:/Anaconda/envs/dnn/python.exe -c ' *)",
+      "Bash(C:/Anaconda/envs/dnn/python.exe *)",
+      "Read(//c/Users/Mudit Garg/AppData/Roaming/jupyter/kernels/**)",
+      "Read(//c/Anaconda/share/jupyter/kernels/**)"
+    ]
+  }
+}
