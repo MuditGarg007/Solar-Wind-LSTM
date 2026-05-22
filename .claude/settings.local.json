@@ -17,7 +17,15 @@
       "Bash(C:/Anaconda/envs/dnn/python.exe -c ' *)",
       "Bash(C:/Anaconda/envs/dnn/python.exe *)",
       "Read(//c/Users/Mudit Garg/AppData/Roaming/jupyter/kernels/**)",
-      "Read(//c/Anaconda/share/jupyter/kernels/**)"
+      "Read(//c/Anaconda/share/jupyter/kernels/**)",
+      "Bash(python3)",
+      "mcp__jupyter__use_notebook",
+      "mcp__jupyter__read_notebook",
+      "mcp__jupyter__list_files",
+      "Bash(jupyter server *)",
+      "Bash(jupyter notebook *)",
+      "mcp__jupyter__connect_to_jupyter",
+      "Bash(python *)"
     ]
   }
 }

@@ -34,38 +34,47 @@ Raw data lives in `archive/`:
 **Data pipeline** (`load_and_preprocess` → `create_sequences`):
 1. Load CSVs, set `(period, timedelta)` multi-index
 2. Resample to hourly means per period
-3. Engineer features: `energy = speed * bz_gse`, plus 3-hour rolling means for `bz_gse` and `speed`
-4. Create sliding windows: 24-hour input → 6-hour target vector
+3. Engineer 15 features: `energy = speed * bz_gse`; rolling means for `bz_gse` and `speed` at 3h/6h/12h windows; `dyn_pressure = density * speed²`
+4. Create sliding windows: 48-hour input → 6-hour target vector
 5. Chronological 80/20 split; `StandardScaler` fit only on training data
 
 **Model** (`SolarAttentionLSTM`):
-- 2-layer LSTM (hidden=64, dropout=0.4)
-- Custom attention layer that weights each of the 24 input timesteps
+- 2-layer BiLSTM (hidden=128 per direction, dropout=0.3, bidirectional=True)
+- Custom attention layer that weights each of the 48 input timesteps
 - Output: concatenation of attention context vector + last LSTM hidden state → linear → 6 Dst predictions
 
 **Training**:
-- Asymmetric weighted MSE: storm timesteps (Dst < −20 nT) are penalized 5× more than quiet times
+- Two-tier asymmetric weighted MSE: moderate storms (Dst < −20 nT) 5×, intense storms (Dst < −50 nT) 15×
 - Adam optimizer, lr=0.001, weight_decay=1e-5
-- Early stopping with patience=10 on validation loss
+- Gradient clipping max_norm=1.0
+- Early stopping with patience=15 on validation loss
 
 ## Key Hyperparameters
 
 ```python
-SEQ_LEN = 24        # Input window (hours)
+SEQ_LEN = 48          # Input window (hours)
 FORECAST_HORIZON = 6  # Prediction horizon (hours)
-HIDDEN_DIM = 64
+HIDDEN_DIM = 128
 NUM_LAYERS = 2
-DROPOUT = 0.4
+DROPOUT = 0.3
+BIDIRECTIONAL = True
 BATCH_SIZE = 64
 LEARNING_RATE = 0.001
 TRAIN_SPLIT = 0.8
+EPOCHS = 50
 ```
 
-## Performance (current model)
+## Performance (current best model)
 
-- RMSE: 9.5449 nT (measured at t+6 only)
-- Pearson Correlation: 0.6436
-- R²: 0.2527
+**BiLSTM + GRU Correction (full val set, t+6):**
+- RMSE: 7.7751 nT
+- Pearson Correlation: 0.7201 (BiLSTM base)
+- R²: 0.4141 (BiLSTM base)
+
+**BiLSTM base (Phase 2, full val set, t+6):**
+- RMSE: 8.4531 nT
+- Pearson Correlation: 0.7201
+- R²: 0.4141
 
 ---
 
