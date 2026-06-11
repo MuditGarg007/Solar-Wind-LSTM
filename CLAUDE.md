@@ -198,6 +198,13 @@ Coverage ≈ nominal (slightly conservative). **Width grows monotonically t+1→
 
 ## Progress Log
 
+### Phase F — Completed: Normalized conformal (volatility difficulty) tested — Mondrian stays primary (2026-06-11)
+Tested the optional Phase C follow-up: normalized split-conformal using a continuous difficulty estimator sigma(x) = mean over the 48h input window of (bz_gse_std + bt_std + speed_std) ("recent solar-wind volatility"), instead of discrete Mondrian bins (by predicted severity). Base model only (`solar_bilstm_model.pth`), no retrain. Standalone script `phase_f_normalized_conformal.py`; cell `phase_f_normalized` inserted after `phase_c_uq_aug` (execution-pending — outputs in `conformal_normalized.csv`, `conformal_method_comparison.csv`).
+- **Intense @95% t+6 coverage:** marginal 64.3% → normalized **72.9%** (+8.6pp) → Mondrian **82.9%** (+18.6pp). Normalized closes part of the gap but Mondrian still wins, at width 107.5 vs normalized 77.4 nT.
+- **Quiet @95% t+6:** normalized is *worse* than both alternatives (97.3% @ w=47.3 vs marginal 98.6%/44.5 and Mondrian 97.7%/36.5) — high solar-wind volatility doesn't always mean high prediction error (e.g. turbulent storm-recovery hours that the model still nails), so the sigma adds unneeded width to easy quiet rows.
+- **Why Mondrian wins:** it bins by the model's own *predicted severity*, which correlates with residual magnitude better than raw input volatility does.
+- **Decision: REJECT as a replacement. Keep Mondrian (Phase C / Phase C aug) as the shipped storm-adaptive UQ.** Documented negative/partial result. Possible future refinement (not attempted): Mondrian bins of normalized (sigma-scaled) residuals, combining both signals instead of treating them as alternatives.
+
 ### Phase E — Completed: 10-fold blocked CV + paired significance tests (2026-06-01)
 Added the significance protocol TriQXNet has and we lacked (they use 10-fold CV paired t-tests; we had only 5-seed mean±std). Cell `cv_significance` after `omni1m_multiseed`. **Leakage-safe blocked folds** (NOT plain random 10-fold): 139,713 pooled sequences → 10 contiguous chronological blocks/period; fold-train drops a 54-seq (`SEQ_LEN+FORECAST_HORIZON`) guard band each side of the test block so no train window shares raw hours with the test block. Per fold: refit scaler, train base + aug (fold-train + 1389 1-min OMNI seqs) at the **same seed → paired**, storm-weighted loss + early stop. Metric = t+6 RMSE on identical fold-test. 20 trainings, ~4.3 h on RTX 4060. Outputs `cv_significance_folds.csv` + `cv_significance_tests.csv`.
 - **Results (paired-t / Wilcoxon across 10 folds, meanΔ>0 = first model wins, lower RMSE better):**
@@ -301,6 +308,10 @@ Parity work toward TriQXNet-style evaluation protocol.
 
 ## Key Observations & Negative Results (DO NOT REPEAT)
 
+### Normalized conformal (volatility sigma) does not beat Mondrian (2026-06-11)
+
+Phase F tried replacing Mondrian's discrete predicted-severity bins with a continuous difficulty estimator (sigma = window-mean of bz_gse_std+bt_std+speed_std), scaling conformal residuals per-sample. Intense @95% t+6 coverage: marginal 64.3% → normalized 72.9% → Mondrian 82.9% — normalized partially closes the gap but Mondrian wins, and normalized is *worse than both* on the quiet bin (97.3% @ w=47.3 vs marginal 98.6%/44.5, Mondrian 97.7%/36.5) because raw input volatility doesn't track prediction error as well as the model's own predicted severity does. **Do not replace Mondrian with raw-volatility normalized conformal.** If revisited, combine signals (Mondrian bins of normalized residuals), don't substitute.
+
 ### More OMNI storms (27 vs 15) does NOT help — curation beats count (2026-05-26)
 
 Phase D-2 tested expanding the adopted 1-min OMNI augmentation from 15 → 27 storms (12 DST-verified Dst<−100 additions). 5-seed paired re-run (base reproduced exactly): 27-storm aug beats base but **regresses vs the 15-storm adopted model** — intense t+6 Δ +5.57±3.68 vs the 15-storm +8.36±3.39 (−2.8 nT), aggregate Δ +0.341±0.275 vs +0.48±0.28, and aug variance rose (intense std 3.39→3.75). The 12 additions span solar-min years (smoothed_ssn 40–80) + 2023/24 and several are weaker (Dst −103 to −176) vs the curated 15 (incl. Gannon −406); heterogeneous solar-cycle/instrument provenance + diluted extreme tail injects noise ≈ signal at the margin. **The storm-scarcity lever has a ceiling: the right 15 beat 27 mixed.** Do NOT re-attempt blind storm-count expansion. If revisited, curate for extreme Dst + matched solar-cycle phase, not raw count. Cell `omni1m_build` reverted to the 15-storm list. Full numbers: Progress Log §Phase D-2 + `results.md`.
@@ -368,7 +379,10 @@ Conformal prediction intervals added to the BiLSTM primary (`crepes` 0.9.0, cali
 **→ Next levers:**
 - ~~**10-fold CV paired t-tests** for significance (match TriQXNet's bar).~~ ✅ **DONE — Phase E, 2026-06-01.** Leakage-safe blocked 10-fold. Intense `aug−base` +3.01 nT (Wilcoxon p=0.049, sig); intense `base−persist` +5.12 nT (p=0.007, sig). Aggregate aug-gain ns (matches tradeoff). Phase D adoption holds under the stricter protocol. See Progress Log §Phase E + `results.md`.
 - ~~**Real sub-hourly OMNI** (1-min `OMNI_HRO_1MIN`, true mean+std, many more storms)~~ ✅ **DONE — Phase D, ADOPTED 2026-05-25.** Intense t+6 44.5→36.1 nT (Δ +8.36±3.39, 5-seed robust); aggregate 11.42→10.94. The storm-scarcity lever worked. Next within this lever: more storms (25+) + recalibrate UQ on aug model.
-- **(Optional) normalized conformal** with a difficulty estimator (e.g. recent solar-wind volatility) instead of discrete Mondrian bins — smoother adaptive width, may close more of the intense undercoverage.
+- ~~**(Optional) normalized conformal** with a difficulty estimator (e.g. recent solar-wind volatility) instead of discrete Mondrian bins — smoother adaptive width, may close more of the intense undercoverage.~~ ✅ **TESTED & REJECTED — Phase F, 2026-06-11.** Volatility-sigma normalized conformal closes part of the gap (intense 64.3→72.9%) but Mondrian still wins (82.9%) and normalized is worse on quiet. Mondrian stays primary. See Progress Log §Phase F + `results.md`.
+
+### ✅ ALL PLANNED LEVERS EXHAUSTED (2026-06-11)
+Phases A–F complete. Primary model: BiLSTM-base (`solar_bilstm_model.pth`, test t+6 11.26 nT) for t+1–t+5/quiet, aug model (`solar_bilstm_omni1m_model.pth`) for t+6 storm warning, Mondrian conformal for storm-adaptive UQ. No open levers currently planned — future work would need new data sources or a fundamentally different problem framing (see Decision log for what's already been ruled out).
 
 ---
 

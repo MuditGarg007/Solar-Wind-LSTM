@@ -188,3 +188,49 @@ Matches TriQXNet's significance bar (they used 10-fold CV paired t-tests; we pre
 - CV RMSEs run higher than the fixed held-out test numbers (agg ~11–16 nT/fold vs test 11.26) because folds include storm-rich blocks and each fold trains on less/different data — expected; CV is intentionally conservative, not directly comparable to the held-out split.
 - Per-fold intense N ranges 231–727 (fold-dependent); folds with fewer intense rows add seed/sample noise, widening the intense-delta variance and explaining why the strong held-out +8.36 nT compresses to +3.01 nT here.
 - **Verdict:** significance protocol now matches TriQXNet's bar. Headline claims that clear it: (a) model >> persistence on intense storms (p=0.007), and (b) aug > base on intense storms (Wilcoxon p=0.049). Aug aggregate and the persistence-aggregate loss are reported honestly as expected non-wins.
+
+---
+
+# Phase F — Normalized conformal prediction (volatility difficulty estimator) (2026-06-11)
+
+Optional follow-up flagged in CLAUDE.md: replace discrete Mondrian bins (by predicted severity)
+with a continuous difficulty estimator, sigma(x) = "recent solar-wind volatility" = mean over
+the 48h input window of (bz_gse_std + bt_std + speed_std). Normalized split-conformal scales the
+calibration residuals by sigma, giving a smooth per-sample interval width instead of 3 discrete
+bins. Base model only (`solar_bilstm_model.pth`), no retrain. Standalone script
+`phase_f_normalized_conformal.py` (cell `phase_f_normalized` inserted after `phase_c_uq_aug`,
+execution-pending). Outputs `conformal_normalized.csv`, `conformal_method_comparison.csv`.
+
+## Per-horizon coverage(%) / width(nT), held-out test — Marginal vs Normalized
+| Step | marg cov@95 | marg w@95 | norm cov@95 | norm w@95 |
+|---|---|---|---|---|
+| t+1 | 96.8 | 40.0 | 96.3 | 43.1 |
+| t+6 | 97.0 | 44.5 | 96.3 | 50.5 |
+
+Both ≈ nominal; normalized runs slightly wider on average (smooth volatility scaling vs constant width).
+
+## Per-storm-bin coverage @95% (t+6) — Marginal vs Mondrian vs Normalized
+| Bin (by actual) | N | marg cov% | marg w | mond cov% | mond w | norm cov% | norm w |
+|---|---|---|---|---|---|---|---|
+| Quiet (≥−20) | 11900 | 98.6 | 44.5 | 97.7 | 36.5 | 97.3 | 47.3 |
+| Moderate (−50..−20) | 1687 | 93.1 | 44.5 | 91.7 | 54.9 | 94.5 | 67.1 |
+| Intense (<−50) | 387 | **64.3** | 44.5 | **82.9** | 107.5 | **72.9** | 77.4 |
+
+## Verdict
+**Normalized conformal closes part of the marginal→Mondrian gap on intense storms but does not
+beat Mondrian.** Intense coverage: marginal 64.3% → normalized 72.9% (+8.6pp) → Mondrian 82.9%
+(+18.6pp). Mondrian still wins on the metric that matters (intense undercoverage), at a larger
+width (107.5 vs 77.4 nT). Normalized is also worse than both marginal and Mondrian on the quiet
+bin (97.3% at w=47.3, vs marginal 98.6%/44.5 and Mondrian 97.7%/36.5) — the volatility sigma adds
+width to quiet hours that don't need it, because high-volatility quiet periods exist (e.g.
+recovery-phase turbulence after a storm) that aren't actually hard to predict.
+
+**Why Mondrian wins:** Mondrian bins by *predicted severity*, which is directly correlated with
+the residual magnitude it's calibrating (the model's own storm/quiet split is a better difficulty
+proxy than raw input volatility). The volatility sigma is a noisier proxy — high Bz/Bt/speed std
+doesn't always mean high *prediction* error.
+
+**Decision: keep Mondrian (Phase C / Phase C aug) as the shipped storm-adaptive UQ.** Normalized
+conformal is a documented negative/partial result — do not adopt as a replacement. Possible
+future refinement (not attempted): combine sigma with predicted severity (Mondrian bins of
+normalized residuals) rather than treating them as alternatives.
