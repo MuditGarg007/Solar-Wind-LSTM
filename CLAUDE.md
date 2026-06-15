@@ -65,7 +65,7 @@ TRAIN_SPLIT=0.7; VAL_SPLIT=0.2; TEST_SPLIT=0.1; EPOCHS=50; FEATURE_SET='paper'
 - agg `aug−base` ns (p=0.105); agg `base−persist` −0.98 (p=0.016, persistence wins aggregate) — both expected, quiet-dominated.
 - CV intense N/fold 231–727; CV RMSE runs higher than fixed held-out (storm-rich blocks, less train/fold) — not directly comparable by design.
 
-## STATUS: Phases A–K COMPLETE. Phase J (Kp/ap/AE inputs) ADOPTED — first new-modality win. Phase K (IG interpretability) DONE — all 5 next-steps closed.
+## STATUS: Phases A–L COMPLETE. Phase J (Kp/ap/AE inputs) ADOPTED — first new-modality win. Phase K (IG interpretability) DONE — all 5 next-steps closed. Phase L (SYM-H target) TESTED & REJECTED — both variants, see DO NOT REPEAT #11. Bucket-2 SYM-H closed; only remaining accuracy lever = solar imagery/CME/L1 new raw modality.
 
 Phase J (next-step #4) = first external-data lever to beat base on held-out test (leakage-verified, multi-seed). Remaining open levers: SHAP (#5), SYM-H target, solar imagery. Everything else ruled out (see DO NOT REPEAT).
 
@@ -79,15 +79,14 @@ MagNet base periods are **anonymized** (relative timedelta). Recovered absolute 
 
 **Bucket 1 — housekeeping: DONE** (results embedded above). Optional leftover: reword `EXECUTION PENDING` headers → "results embedded below"; or full kernel rerun to populate real outputs (incl 4.3h CV).
 
-**Bucket 2 — new-data levers (curated-storm sub-option now CLOSED, see DO NOT REPEAT #10; remaining options below):**
-- New input modality (not a transform of existing inputs — those rejected #9): solar imagery (SDO/AIA), CME catalog, L1 real-time feed.
-- Higher-cadence target: SYM-H instead of hourly Dst → more storm-resolution labels.
+**Bucket 2 — new-data levers (curated-storm CLOSED #10; SYM-H target CLOSED #11; only this remains):**
+- New input modality (not a transform of existing inputs — those rejected #9): solar imagery (SDO/AIA), CME catalog, L1 real-time feed. Heaviest lever, highest uncertainty.
 
 **Bucket 3 — productionize / publish (work is paper-shaped):**
 - Real-time inference: persistence t+1–t+5, base+aug t+6, Mondrian UQ bands.
 - Writeup — novel vs TriQXNet = multi-horizon + honest storm-conditional + per-horizon UQ.
 
-Recommendation: storm-RMSE lever exhausted (15-storm Phase D stays adopted) → ship/finish via bucket 3, or bucket 2 new-modality/SYM-H if pursuing accuracy further.
+Recommendation: accuracy lever effectively exhausted (storm-RMSE bound, SYM-H/curation/transforms all rejected; only raw-imagery modality untried = big lift) → ship/finish via bucket 3.
 
 ## Next steps (from deep-research-report cross-check — recommended order)
 
@@ -114,6 +113,8 @@ Maybe (bigger lift): SYM-H target (bucket 2, higher-cadence labels); physics bas
 9. **Physics-coupling features** (bz_south, vBs, clock_angle, epsilon, newell) — −0.16 nT worse; redundant nonlinear transforms BiLSTM already learns. Don't add.
 10. **Curated extreme storms (18 vs 15, all Dst<−200, ssn-matched)** — added Sep1998/Oct1999/Apr2023 to adopted 15-list, 5-seed paired vs base: intense Δ +2.93±3.39 (1/5 seed negative), aggregate Δ +0.081±0.292 (2/5 negative) — both worse than adopted 15-storm (intense +8.36±3.39 all-positive, agg +0.48±0.28). Even strict Dst<−200 + ssn-matched curation regresses vs 15-list. Confirms #1: 15-storm set is a local optimum, don't expand. Closes bucket-2 curated-storm sub-option.
 
+11. **SYM-H target (hourly-mean OR hourly-min) — Phase L, both rejected.** Probe (16yr, leakage-safe recovered dates): hourly-**mean** SYM-H ≈ Dst (corr 0.945, RMSE 6.23) → relabel trivial. hourly-**min** SYM-H exposes +16–30% more extreme-storm-labeled hours (grows at extremes), so 5-seed paired tested it as target on identical a/b/c windows vs Dst-control. Result: RMSE uniformly **worse** (t+6 symh 12.5–13.2 vs dst 11.1–12.1, no seed overlap; intense 43.99 vs 38.54). Detection: SYM-H-min **does** raise extreme POD (+0.068 @−80/−100) and fixes Phase G under-forecast BIAS (0.57/0.80→0.78/1.06, near-unbiased) BUT FAR blows up (0.03→0.19, 0.19→0.32) → net **CSI tie-to-worse**. Killer: that POD/BIAS gain = lower effective alarm threshold baked into target — **Phase H τ-sweep already buys the same POD/FAR trade on the existing Dst model, no new data.** SYM-H-min dominated by cheaper existing solution. Closes bucket-2 SYM-H sub-option. Artifacts: `_symh_probe.py`/`_build_symh.py`/`_symh_train.py`, `symh_perhorizon.csv`/`symh_stormcond.csv`/`symh_detection.csv`, `solar_bilstm_symh_model.pth` (ablation only, don't promote).
+
 **Process rule: ALWAYS multi-seed before declaring storm-metric win.** Intense N≈387 → ±1–3.5 nT seed noise, enough to fake ±4 nT improvement on one seed (nearly caused false ADOPT).
 
 ## Key cells
@@ -126,6 +127,7 @@ Multi-task classifier (Phase H, next-step #2): `mtl_model_def`/`mtl_train`/`mtl_
 Robustness (Phase I, next-step #3): `robustness_tests` (+ `_results` md) → `robustness_metrics.csv`/`.png`. No retrain, base checkpoint on perturbed test inputs.
 Geomag-index inputs (Phase J, next-step #4): `phase_j_build` (date-recovery + Kp/ap/AE merge, EXECUTION PENDING) + `phase_j_results` md → `solar_bilstm_idx_model.pth`/`idx_scaler.pkl`, `geomag_index_ab.csv`/`geomag_index_lag_decay.csv`. Standalone scripts: `_date_recovery_full.py`, `_fetch_indices.py`, `_build_features_indices.py`, `_ab_train_indices.py`, `_lag_sweep.py`, `_finalize_phase_j.py`. Caches `_magnet_dates.json`, `_omni_dst_1995_2020.pkl`, `_omni_indices_1998_2019.pkl`, `_seq_base.npz`/`_seq_aug.npz`.
 Interpretability (Phase K, next-step #5): `phase_k_shap` (IG code, EXECUTION PENDING — computed standalone via `_shap_ig.py`) + `phase_k_results` md → `shap_feature_importance.csv`, `shap_time_profile.csv`, `shap_ig.png`. Hand-rolled IG, cuDNN disabled for eval-mode RNN backward, base checkpoint on held-out test.
+SYM-H target (Phase L, bucket-2, REJECTED): `phase_l_results` md only (computed standalone). Scripts `_symh_probe.py`/`_build_symh.py`/`_symh_train.py` → `symh_perhorizon.csv`/`symh_stormcond.csv`/`symh_detection.csv`, `solar_bilstm_symh_model.pth`, caches `_omni_symh_1min.pkl`/`_seq_symh.npz`/`_symh_aligned.pkl`. Don't promote.
 Ablation artifacts only (rejected, don't promote): `conv1d_step2`, `conv1d_plainmse`, `seq_ablation_step3`, `omni_download`/`omni_features`/`omni_augment`/`omni_multiseed`.
 
 Full historical tables: `results.md`, `PROGRESS_REPORT.md`.
