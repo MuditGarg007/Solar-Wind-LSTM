@@ -1,71 +1,81 @@
 # Paper Notes — Key Points & Findings
 
+> **2026-06-16 reframe (Phase N):** persistence beats the model on **intense point-RMSE at every horizon** on the fixed held-out test. The old "model wins t+6 mainly intense, +17% skill" claim was wrong (it came from storm-rich CV blocks, not the fixed test). The honest finding is now the **central contribution** — see §"Reframed contribution" below.
+
 ## Problem
-Predict Dst geomagnetic index 6h ahead (multi-horizon t+1..t+6) from solar wind data (OMNI/MagNet dataset). Early storm warning.
+Predict Dst geomagnetic index 6h ahead (multi-horizon t+1..t+6) from solar wind data (OMNI/MagNet dataset). Early storm warning. Model inputs **exclude Dst** (forecast from upstream solar wind only).
 
-## What differentiates this work
+## Reframed contribution (the honesty IS the novelty)
 
-1. **Multi-horizon forecasting (t+1 to t+6), not single-step.** TriQXNet (arXiv:2407.06658v3) reports only t0/t+1 avg. We give honest per-horizon degradation curve.
+Most Dst-forecasting papers report a single aggregate RMSE on quiet-dominated data and claim a persistence beat — hiding that **persistence is a deceptively strong baseline during storms** because Dst is strongly autocorrelated 6h out. We show, on a fixed held-out test, that a solar-wind-only BiLSTM does **NOT** beat persistence on intense-storm point-RMSE at any horizon. The value of the model is therefore **not** lower storm point-error; it is:
 
-2. **Storm-conditional evaluation, not just aggregate RMSE.** Quiet/Moderate/Intense breakdown reveals model value concentrated in storms — aggregate metrics hide this.
+1. **Dst-independent forecasting** — the model never sees Dst, so it remains usable when Dst telemetry is stale/unavailable (persistence dies the moment the last Dst is old). Operational complement, not replacement.
+2. **Calibrated probabilistic storm detection** — multi-task classifier head (Phase H): AUC 0.983, Brier 0.012, ECE 0.003, tunable threshold beats persistence AND deterministic model on POD/CSI/HSS. This is the real operational win (alerting), distinct from point-RMSE.
+3. **Per-horizon, severity-adaptive uncertainty** — Mondrian conformal intervals widen honestly with lead time (40.0→44.5 nT @95%, t+1→t+6); persistence gives no calibrated UQ.
+4. **Honest multi-horizon, per-regime evaluation** — per-horizon degradation curves + quiet/moderate/intense split + physics baseline (Burton/OM2000) + persistence at every horizon. Most works report none of this.
+5. **Robustness / degradation characterization** (Phase I) — graceful under 10% dropout (≤1.1×); magnetometer outage is the critical failure (intense 2.05×) → mag-redundancy is the operational priority.
 
-3. **Per-horizon uncertainty quantification (Mondrian conformal, severity-binned).** Intervals widen honestly with lead time (40.0→44.5 nT @95%, t+1→t+6) — shows error growth with horizon, which single-horizon UQ baselines can't demonstrate.
+## Key honest results (held-out test, fixed N=387 intense)
 
-4. **1-min OMNI augmentation (Phase D)** — true hourly mean+std features from OMNI_HRO_1MIN (vs hourly-only proxy), validated multi-seed (5 seeds, all positive on intense).
+**Intense-storm RMSE by horizon (nT) — persistence wins everywhere:**
 
-5. **Rigorous statistical validation**: 5-seed paired tests, leakage-safe blocked 10-fold CV with Wilcoxon/paired-t significance (Phase E).
+| horizon | persistence | base model | OMNI-aug (deployed) |
+|---|---|---|---|
+| t+1 | **12.24** | 35.49 | 36.10-class |
+| t+3 | **24.61** | 35.78 | — |
+| t+6 | **31.43** | 44.64 | 36.10 |
 
-6. **Persistence baseline honestly reported** — persistence beats model t+1–t+5; model only wins t+6 (mainly intense storms, +17% skill). Deploy strategy = horizon-based switchover, not naive "our model always wins" claim.
+**Aggregate RMSE t+6:** base 11.26 < persistence 12.71 → model wins **aggregate** t+6 (quiet/moderate-driven, NOT intense). Persistence wins aggregate t+1–t+5.
 
-## Major results (held-out test, t+6)
+**Storm-conditional t+6 (base):** Quiet (N=11900) 7.94 | Moderate (N=1687) 12.16 | Intense (N=387) 44.64.
 
-**Two adopted models, deployed by regime:**
-- Base BiLSTM (`solar_bilstm_model.pth`): RMSE 11.26 nT, r=0.8247, R²=0.6780. Primary for t+1–t+5 and quiet conditions.
-- 1-min OMNI augmented (`solar_bilstm_omni1m_model.pth`): aggregate RMSE 10.94, **intense storms 36.10 nT (−19% vs base)**. Primary for t+6 storm warning.
+**Mechanism:** model excludes Dst; persistence exploits storm-time Dst autocorrelation. The model is the better forecaster only where Dst autocorrelation is weak/aggregate-averaged.
 
-**5-seed paired Δ (aug vs base, t+6):**
-- Aggregate: +0.48 ± 0.28 nT
-- Intense: +8.36 ± 3.39 nT (all 5 seeds positive)
+## Storm detection (Phase H/G — the operational headline)
+- Multi-task: shared encoder + regression head + per-horizon P(Dst<−50) classifier; joint loss = weighted MSE + 200·BCE.
+- AUC 0.983, Brier 0.012, ECE 0.003 (well-calibrated).
+- Tunable threshold τ=0.30: POD 0.713 / CSI 0.573 / HSS 0.721 — beats persistence (0.695/0.533) and deterministic base (0.669/0.519).
+- Resolves Phase-G finding that the deterministic model under-forecasts storm intensity (conservative-alarm regime, data-scarcity bound).
 
-**Storm-conditional t+6 (base, held-out):**
-| Regime | N | RMSE (nT) |
-|---|---|---|
-| Quiet (Dst≥−20) | 11900 | 7.94 |
-| Moderate (−50<Dst<−20) | 1687 | 12.16 |
-| Intense (Dst<−50) | 387 | 44.64 |
+## Geomag-index inputs (Phase J — only adopted accuracy lever)
+- Adding lagged Kp/ap/AE inputs (32 feat): 5-seed paired, all positive — t+1 intense +4.84±1.53 (−21%), front-loaded (decays to ns by t+6).
+- Required recovering anonymized MagNet absolute dates via Dst-fingerprint cross-correlation. Leakage-safe: input-window-only + cadence-lag, verified by smooth lag-decay (no cliff).
+- Caveat: even idx-model intense does NOT beat persistence when live Dst exists; its value is the Dst-stale/unavailable regime. Needs near-real-time indices (gain halves by ~3h staleness).
 
-**Persistence comparison:** persistence wins t+1–t+5; model wins t+6 (especially intense, +17% skill over persistence).
+## Interpretability (Phase K — hand-rolled integrated gradients)
+- Top features: bz_gsm, speed, theta_gsm, bt. On storm rows: bt + bz_gsm + speed dominate = exactly the Dst-driving physics.
+- Recency: |IG| at t=−1 is 12.4× t=−48; last 6h carry the bulk → echoes the autocorrelation persistence exploits.
+- Explains why physics-coupling transforms (vBs/clock-angle/epsilon/Newell) were redundant: model already concentrates on Bz/Bt/speed.
 
-## Significance (Phase E, blocked 10-fold CV)
-- Intense aug−base: +3.01 nT, Wilcoxon p=0.049 (sig), paired-t p=0.054. Confirms Phase D under stricter protocol.
-- Intense base−persistence: +5.12 nT, p=0.007 (sig) — model clearly beats persistence on storms.
-- Aggregate aug−base: ns (p=0.105) — expected, quiet-dominated.
-- Aggregate base−persistence: −0.98 nT (p=0.016) — persistence wins aggregate, expected.
-
-## UQ results (Mondrian conformal, severity-binned)
-- Aug-model recalibrated: intense @95% t+6 coverage 90.4% (vs base marginal coverage only 64.3%).
-- Marginal interval width grows honestly with horizon: 40.0 → 44.5 nT (@95%, t+1→t+6).
+## Physics baseline (Phase N — Burton/OM2000)
+- ML beats Burton as a forecaster (t+6 agg 11.26 vs 17.14) AND even as a hindcast with perfect concurrent driver (11.26 vs 14.62) — ML captures coupling the analytic ODE misses.
+- Surfaced the persistence-intense discrepancy that drove the reframe.
 
 ## vs TriQXNet (arXiv:2407.06658v3)
-- Same dataset/features/split.
-- Our t+1: 10.14 nT vs their reported 9.27 (their number = t0/t+1 avg, t0 trivial nowcast, quiet-dominated).
-- On extremes their t0/t+1 = 20.33/20.86 nT — much worse than our intense numbers in relative terms.
-- Gap is NOT input window length or architecture — likely their 3-pipeline ensemble + t0-inflated metric. Not the focus; our contribution is multi-horizon + storm-conditional + per-horizon UQ, which they lack entirely.
+- Same dataset/features/split. Our t+1 10.14 vs their reported 9.27 (their number = t0/t+1 avg; t0 = trivial nowcast, quiet-dominated; on extremes they hit t0/t+1 = 20.33/20.86).
+- Gap is NOT window length or architecture — their 3-pipeline ensemble + t0-inflated metric. We add multi-horizon + honest storm-conditional eval + per-horizon UQ + calibrated detection, which they lack.
 
 ## Architecture
-2-layer BiLSTM (hidden=128/dir, dropout=0.3) + attention over 48h input window → concat(context, last hidden) → linear → 6-step Dst output. Two-tier asymmetric weighted MSE (Dst<−20 → 5×, Dst<−50 → 15×).
+2-layer BiLSTM (hidden=128/dir, dropout=0.3) + attention over 48h window → concat(context, last hidden) → linear → 6-step Dst. Two-tier asymmetric weighted MSE (Dst<−20 →5×, Dst<−50 →15×).
 
-## Negative results worth mentioning (shows rigor)
+## Negative results (shows rigor — full trail)
 - More OMNI storms (27 vs 15) regressed — curation > count.
-- Longer input windows (96/128h) did not help; 48h optimal.
-- Ensemble/stacking (LGBM, GRU correction) traded quiet gains for worse storm performance.
-- Persistence-vs-model hybrid switching: dead end, both grid searches picked model only ~5% of samples and lost on intense.
-- Loss reweighting/oversampling for storm bias: all failed — storm performance is data-scarcity-bound, not loss-bound.
-- Physics-coupling features (vBs, clock angle, etc.) made things worse — BiLSTM already learns these nonlinear transforms.
-- Curated extreme storms (18 vs 15, Dst<−200, ssn-matched) regressed vs adopted 15-storm set — confirms 15-storm set is local optimum.
-- Transformer encoder (2-layer, d_model=128, 4 heads, ~276K params, same 48h window/29 features/storm-weighted loss) lost to BiLSTM-attention on every horizon and regime, held-out test, single seed=42: t+6 agg 12.56 vs 11.26, t+6 quiet 9.60 vs 7.94, t+6 intense 46.58 vs 44.64, t+1 10.62 vs 10.14. Early-stopped epoch 25 (val loss rising after ep10) — overfits on this dataset size. Confirms alt-arch pattern (Conv1D, etc.): BiLSTM-attention remains best for this data scale.
+- Longer windows (96/128h) didn't help; 48h optimal.
+- Ensemble/stacking (LGBM, GRU correction) traded quiet gains for worse storms.
+- Persistence-vs-model hybrid switching: dead (both grid searches picked model ~5%, lost on intense).
+- Loss reweighting/oversampling: all failed — storm perf data-scarcity-bound, not loss-bound.
+- Physics-coupling features (vBs/clock-angle/epsilon/Newell): worse — redundant (confirmed by Phase K).
+- Curated extreme storms (18 vs 15, Dst<−200, ssn-matched): regressed vs 15-set.
+- Transformer encoder: lost to BiLSTM-attention every horizon/regime (overfits at this data scale).
+- SYM-H target (mean or min): rejected — relabel trivial or POD/FAR trade already buyable via Phase-H τ-sweep on existing Dst model.
+- CME catalog + GOES flares + F10.7 inputs (Phase M): probe passed ~2× lift but regressed every horizon as input — signal too weak/sparse, dilutes clean solar-wind features.
+- **Accuracy lever exhausted:** raw SDO/AIA imagery is the only untried modality but launched 2010 → can't cover recovered 1998/2004 periods → physically dead for this dataset.
+
+## Statistical-significance caveat (important for honesty)
+- Phase-E blocked 10-fold CV reported intense base−persist +5.12 nT (Wilcoxon p=0.007). **This does NOT transfer to the fixed held-out test** (Phase N: persistence wins intense everywhere). CV blocks are storm-rich, all-horizon-averaged, less train-per-fold → "not directly comparable." Report the fixed-test result as deploy-relevant; present CV as a separate, caveated robustness check, NOT as a persistence-beat claim.
+- aug−base intense +8.36±3.39 (5-seed, all positive) is a real **aug-vs-base** effect, but aug still loses to persistence on intense — frame as relative model improvement, not absolute storm skill.
 
 ## Suggested paper framing
-Title direction: "Multi-Horizon Dst Forecasting with Storm-Conditional Evaluation and Adaptive Uncertainty Quantification"
+Title direction: "When Persistence Wins: Honest Multi-Horizon Dst Forecasting with Calibrated Storm Detection and Adaptive Uncertainty"
 
-Key narrative: most Dst forecasting papers report single aggregate metric on quiet-dominated data, hiding poor storm performance — exactly when forecasts matter most. This work (a) evaluates per-horizon and per-regime, (b) shows where models add value over persistence (t+6 storms), (c) provides calibrated, severity-adaptive uncertainty bands that widen honestly with lead time, and (d) documents a thorough, statistically validated ablation trail (including negative results) for what does/doesn't help storm-time accuracy.
+Narrative: most Dst papers hide that persistence is hard to beat on storms because Dst is autocorrelated. We (a) evaluate per-horizon and per-regime against persistence AND a physics baseline; (b) show a solar-wind-only model does not beat persistence on intense point-error — and argue the right contributions are Dst-independent forecasting, calibrated probabilistic storm detection (AUC 0.983), and severity-adaptive per-horizon UQ; (c) document a statistically validated ablation trail incl. negative results and a CV-vs-fixed-test discrepancy resolved in favor of the fixed test.
