@@ -125,6 +125,9 @@ Physics baseline (Burton/OM2000) — ✅ DONE (Phase N, `_burton_baseline.py` �
 
 **Process rule: ALWAYS multi-seed before declaring storm-metric win.** Intense N≈387 → ±1–3.5 nT seed noise, enough to fake ±4 nT improvement on one seed (nearly caused false ADOPT). **Phase M corollary: a passing cheap probe (~2× association lift) does NOT predict a model win — modality must beat base AS INPUT under 5-seed paired, signal can be too weak/sparse to survive feature dilution.**
 
+## Bucket 3 — productionize (Phase O, 2026-06-16): real-time inference module SHIPPED
+`solar_dst_inference.py` — `DstForecaster.predict(window29, last_dst, dst_age_h, window32, index_age_h, mag_ok)` → per-horizon `Dst`/`source`/`lo95`/`hi95`/`storm_prob`/`severity` + `storm_alert` + monitor notes. Routing matches corrected Phase-N policy: persistence t+1–t+5 + t+6-intense when Dst fresh; base t+6-aggregate; idx t+1–t+3 / base t+4–t+6 when Dst stale; mtl classifier P(Dst<−50) alarm at τ=0.30; Mondrian 95% bands by predicted severity (quiet 36.5 / moderate 54.9 / intense 107.5, base bins); monitors = Dst-staleness (>1.5h → model path), index-staleness (idx halves >3h, off >6h), mag-outage (intense bands ×2.05). OMNI-aug intentionally NOT routed (persistence owns t+6 intense; aug scaler not persisted). Loads base/idx/mtl checkpoints + `base_scaler.pkl` (refit on `_seq_base.npz` Xtr, reproduces documented base EXACTLY) + `idx_scaler.pkl`. Smoke test `_smoke_inference.py`: 4 routing scenarios + batch base intense t+6 RMSE=44.64 PASS. Remaining bucket-3: paper figures/draft.
+
 ## Key cells
 
 Pipeline: `0d486255` (split/exec) · `bc9878f0` (model def) · `8a4080ce` (train) · `af6ee96c` (inference) · `446d08ce`/`3b7398e3` (per-step + storm tables) · `37d6b8b0` (A3 TriQXNet) · `bb012d7a` (writes `results.md`).
