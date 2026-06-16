@@ -1,0 +1,5 @@
+extra-lag decay: aug t+1 intense RMSE (lower=better). base ref in []
++1h seed42: aug 29.57  [base 35.49, orig-lag aug 28.01]  gain +5.92
++1h seed7: aug 32.80  [base 37.85, orig-lag aug 33.21]  gain +5.05
++3h seed42: aug 31.41  [base 35.49, orig-lag aug 28.01]  gain +4.08
++3h seed7: aug 36.02  [base 37.85, orig-lag aug 33.21]  gain +1.83

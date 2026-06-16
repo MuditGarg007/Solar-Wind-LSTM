@@ -1,0 +1,3 @@
+saved solar_bilstm_idx_model.pth (best val 98.0481, epoch~19)
+checkpoint test: agg 9.83 | intense 36.70 | t+1 intense 28.01 | t+6 intense 45.49
+saved geomag_index_lag_decay.csv

@@ -1,0 +1,5 @@
+aug_lag feats 32
+seed | aug_lag t+1 intense | base t+1 intense (CSV) | aug(orig lag)
+42 | 37.07 | 35.49 | 28.01   (aug_lag-base delta -1.58)
+1 | 34.27 | 34.96 | 30.65   (aug_lag-base delta +0.68)
+7 | 35.83 | 37.85 | 33.21   (aug_lag-base delta +2.02)

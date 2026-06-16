@@ -1,0 +1,24 @@
+downloading univ_all.txt ...
+CME events parsed: 42625  halo 1013  partial(w>=120) 3846
+earth-directed CMEs: 3846  speed med 563 km/s
+
+Dst hours: 139872  span 1998-02-16 00:00:00 .. 2019-05-31 23:00:00
+
+=== (A) recent earth-directed CME launch -> storm lift (the LEAD signal) ===
+  launch 12-72h before, Dst<-50: flagged 38.0% hours | P(Dst<-50|flag)  5.22% vs base 3.15% | lift 1.66x | meanDst flag  -13.3 vs   -9.7
+  launch 12-72h before, Dst<-80: flagged 38.0% hours | P(Dst<-80|flag)  1.72% vs base 0.94% | lift 1.84x | meanDst flag  -13.3 vs   -9.7
+  launch 24-96h before, Dst<-50: flagged 41.7% hours | P(Dst<-50|flag)  5.41% vs base 3.15% | lift 1.72x | meanDst flag  -13.5 vs   -9.3
+  launch 24-96h before, Dst<-80: flagged 41.7% hours | P(Dst<-80|flag)  1.82% vs base 0.94% | lift 1.95x | meanDst flag  -13.5 vs   -9.3
+  launch 36-108h before, Dst<-50: flagged 41.7% hours | P(Dst<-50|flag)  5.58% vs base 3.15% | lift 1.77x | meanDst flag  -13.7 vs   -9.2
+  launch 36-108h before, Dst<-80: flagged 41.7% hours | P(Dst<-80|flag)  1.90% vs base 0.94% | lift 2.03x | meanDst flag  -13.7 vs   -9.2
+  launch 12-120h before, Dst<-50: flagged 50.1% hours | P(Dst<-50|flag)  5.04% vs base 3.15% | lift 1.60x | meanDst flag  -13.1 vs   -9.0
+  launch 12-120h before, Dst<-80: flagged 50.1% hours | P(Dst<-80|flag)  1.62% vs base 0.94% | lift 1.73x | meanDst flag  -13.1 vs   -9.0
+
+=== (B) ballistic arrival-window alignment ===
+  arrival +/-12h, Dst<-50: flagged 21.1% hours | P(Dst<-50|flag)  6.34% vs base 3.15% | lift 2.01x | meanDst flag  -14.9 vs  -10.0
+  arrival +/-12h, Dst<-80: flagged 21.1% hours | P(Dst<-80|flag)  2.08% vs base 0.94% | lift 2.22x | meanDst flag  -14.9 vs  -10.0
+  arrival +/-24h, Dst<-50: flagged 33.3% hours | P(Dst<-50|flag)  5.81% vs base 3.15% | lift 1.85x | meanDst flag  -14.4 vs   -9.4
+  arrival +/-24h, Dst<-80: flagged 33.3% hours | P(Dst<-80|flag)  1.97% vs base 0.94% | lift 2.11x | meanDst flag  -14.4 vs   -9.4
+
+Decision: strong lift (>~2x) at usable lead (24-96h before) = CME adds info the 48h solar-wind window lacks -> proceed to full build. Lift ~1x = no marginal lead signal.
+

@@ -1,0 +1,22 @@
+=== seed 42 ===
+  base: agg 10.27 | intense 38.57 | t+6 intense 44.64
+  aug: agg 9.83 | intense 36.70 | t+6 intense 45.49
+=== seed 1 ===
+  base: agg 10.13 | intense 37.11 | t+6 intense 42.87
+  aug: agg 9.73 | intense 35.19 | t+6 intense 43.19
+=== seed 7 ===
+  base: agg 10.93 | intense 40.93 | t+6 intense 46.42
+  aug: agg 10.40 | intense 37.49 | t+6 intense 43.97
+=== seed 123 ===
+  base: agg 10.76 | intense 39.56 | t+6 intense 46.74
+  aug: agg 10.00 | intense 35.01 | t+6 intense 43.08
+=== seed 2024 ===
+  base: agg 10.57 | intense 40.36 | t+6 intense 46.19
+  aug: agg 9.96 | intense 38.16 | t+6 intense 44.04
+Traceback (most recent call last):
+  File "C:\Users\Mudit Garg\Desktop\solar\_ab_train_indices.py", line 100, in <module>
+    print('\n=== PAIRED \u0394 (base - aug); +ve = aug better ===')
+  File "C:\Anaconda\envs\dnn\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u0394' in position 13: character maps to <undefined>
