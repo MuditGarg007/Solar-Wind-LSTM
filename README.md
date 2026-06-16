@@ -1,127 +1,199 @@
-# Project Report: Solar Wind Dst Index Prediction
+# Solar Wind to Dst: Honest Multi-Horizon Geomagnetic Storm Forecasting
 
-## 1. Introduction
-Space weather has a direct impact on modern technological infrastructure. Geomagnetic storms, caused by the interaction of the solar wind with Earth's magnetic field, can induce currents in power lines, disrupt satellite electronics, and interfere with radio communication. The Dst (Disturbance Storm Time) index is the primary metric used to track the intensity of these storms. This project builds a deep learning pipeline to predict the Dst index 6 hours in advance, providing an early warning system for operational space weather decision-making.
+Predicting the **Dst geomagnetic index 1 to 6 hours ahead** from upstream solar-wind data (L1 monitors, MagNet/OMNI dataset), using a bidirectional LSTM with attention. The model inputs **exclude Dst itself**, so the system stays usable even when Dst telemetry is stale or unavailable.
 
-## 2. Aim of the Project
-Predict the Dst index at t+1 through t+6 hours using 48 hours of upstream solar wind observations. The target is to exceed the naive persistence baseline at the critical t+6 horizon and to demonstrate meaningful skill on intense geomagnetic storms (Dst < −50 nT).
+> **Central finding (honestly reported):** a solar-wind-only model does **not** beat a persistence baseline on intense-storm point error at any lead time, because Dst is strongly autocorrelated during storms. The real, operationally meaningful contributions are Dst-independent forecasting, calibrated storm detection, and severity-adaptive uncertainty. This README documents both the negative result and where the model genuinely adds value.
 
-## 3. Dataset Details
-The dataset consists of solar wind parameters collected at the L1 Lagrangian point.
-- **Features:** Bx, By, Bz (GSE and GSM), Bt (total field), speed, density, temperature — resampled to hourly means.
-- **Target:** Dst index (nT) at t+1 through t+6.
-- **Time Resolution:** Hourly (resampled via mean within each hour).
-- **Data Splitting:** Chronological 80/20 split. The model is trained on past data and evaluated on held-out future data — the only valid approach for time-series validation.
-- **Scale:** 139,713 total sequences; 111,770 train / 27,943 validation.
+---
 
-## 4. Methodology and Feature Engineering
-15 engineered features are derived from the 7 raw solar wind channels:
+## 1. Problem and approach at a glance
 
-| Feature | Description |
+| Item | Value |
 |---|---|
-| `energy` | `speed × bz_gse` — energy transfer proxy |
-| `bz_3h`, `speed_3h` | 3-hour rolling mean — short-term trends |
-| `bz_6h`, `speed_6h` | 6-hour rolling mean — medium-term trends |
-| `bz_12h`, `speed_12h` | 12-hour rolling mean — sustained conditions |
-| `dyn_pressure` | `density × speed²` — solar wind ram pressure |
+| Target | Dst index, t+1 to t+6 hours ahead (multi-horizon vector) |
+| Inputs | 48 h sliding window, 29 paper features (14 solar-wind vars x hourly mean+std, plus smoothed sunspot number) |
+| Model | 2-layer BiLSTM (hidden 128/direction, dropout 0.3, bidirectional) + attention over 48 timesteps |
+| Loss | Two-tier asymmetric weighted MSE (Dst < -20 weighted 5x, Dst < -50 weighted 15x) |
+| Split | Per-period chronological 70/20/10; StandardScaler fit on train only; held-out test never seen |
+| Test set | N = 13974 hours (intense, Dst < -50: N = 387) |
+| Baselines | Persistence (hold last Dst); Burton/OM2000 physics coupling ODE |
 
-## 5. Model Architecture
+Storm regimes: **quiet** (Dst >= -20), **moderate** (-50 to -20), **intense** (Dst < -50).
 
-### Primary Model: `SolarAttentionLSTM` (BiLSTM)
-- **Input:** 48-hour window × 15 features
-- **LSTM Layers:** 2-layer bidirectional LSTM (hidden=128 per direction, dropout=0.3)
-- **Attention:** Custom temporal attention over the 48 input timesteps
-- **Output:** Concatenation of attention context vector + last hidden state → linear → 6 Dst predictions
+---
 
-### Secondary Models
-- **ResidualGRU:** 1-layer GRU (hidden=32) trained on BiLSTM training-set residuals to correct systematic bias
-- **LightGBM Ensemble:** Gradient-boosted trees stacked on BiLSTM outputs (15 meta-features)
-- **Transformer Encoder:** Multi-head self-attention over the full 48-step window (parallel experiment)
+## 2. Headline result: persistence wins on storms
 
-![Model Architecture](images/model_architecture.png)
+Persistence is a deceptively strong baseline because Dst is autocorrelated 6 hours out. On the fixed held-out test it beats the model on aggregate for t+1 to t+5 and on **intense at every horizon**. The model wins aggregate only at t+6 (quiet and moderate driven).
 
-## 6. Training and Optimization
-- **Two-tier Asymmetric Loss:** Moderate storms (Dst < −20 nT) penalized 5×; intense storms (Dst < −50 nT) penalized 15× relative to quiet periods. Standard MSE ignores rare events — this reweighting forces the model to attend to storms.
-- **Gradient Clipping:** `max_norm=1.0` for training stability with the larger BiLSTM.
-- **Regularization:** Dropout 0.3, weight decay 1e-5.
-- **Early Stopping:** Patience=15 on validation loss.
-- **Optimizer:** Adam, lr=0.001.
+**Per-horizon RMSE (nT), lower is better. Best in bold.**
 
-![Training Progress](images/training_plot.png)
+| Horizon | Aggregate model | Aggregate persist | Aggregate Burton | Intense model | Intense persist | Intense Burton |
+|---|---|---|---|---|---|---|
+| t+1 | 9.82 | **4.13** | 14.65 | 35.49 | **12.24** | 42.12 |
+| t+2 | 9.66 | **6.89** | -- | 34.88 | **19.66** | -- |
+| t+3 | 9.83 | **8.95** | 15.09 | 35.78 | **24.61** | 44.70 |
+| t+4 | 10.25 | **10.52** | -- | 38.27 | **27.42** | -- |
+| t+5 | 10.72 | **11.73** | -- | 41.39 | **29.51** | -- |
+| t+6 | **11.26** | 12.71 | 17.14 | 44.64 | **31.43** | 56.47 |
 
-## 7. Results and Discussion
+![Per-horizon RMSE](figs/fig1_perhorizon_rmse.png)
 
-### Overall Performance (t+6, full validation set)
+*Fig 1. Per-horizon RMSE, aggregate vs intense. Persistence beats the model on intense at every lead; the model wins aggregate only at t+6.*
 
-| Model | RMSE (nT) | Pearson r | R² |
+**Mechanism:** the model never sees Dst; persistence exploits storm-time Dst autocorrelation. The model is the better forecaster only where that autocorrelation is weak or averaged away (aggregate t+6). The model does beat the Burton physics baseline both as a forecaster (t+6 aggregate 11.26 vs 17.14) and even as a perfect-driver hindcast (11.26 vs 14.62), so it captures coupling the analytic ODE misses, but that edge does not overcome persistence on storms.
+
+**Storm-conditional t+6 RMSE (base model):**
+
+| Regime | N | Model t+6 | Persistence t+6 |
 |---|---|---|---|
-| Original LSTM (Phase 1 baseline) | 8.85 | 0.696 | 0.358 |
-| **BiLSTM (Phase 2)** | **8.4531** | **0.7201** | **0.4141** |
-| BiLSTM + GRU Correction (Phase 4) | 7.7751 | — | — |
-| Transformer Encoder (standalone) | 8.2666 | — | — |
-| BiLSTM + GRU + LightGBM (last 20% val) | 8.3234 | — | — |
+| Quiet | 11900 | 7.94 | higher |
+| Moderate | 1687 | 12.16 | higher |
+| Intense | 387 | 44.64 | **31.43** |
 
-### Per-Step RMSE (BiLSTM base, full val set)
+![Storm-conditional t+6](figs/fig2_storm_conditional.png)
 
-| Step | RMSE (nT) | Pearson r | R² |
-|---|---|---|---|
-| t+1 | 8.1655 | 0.7384 | 0.4533 |
-| t+2 | 7.9436 | 0.7505 | 0.4826 |
-| t+3 | 7.9690 | 0.7480 | 0.4793 |
-| t+4 | 8.1479 | 0.7387 | 0.4557 |
-| t+5 | 8.3153 | 0.7290 | 0.4331 |
-| t+6 | 8.4531 | 0.7201 | 0.4141 |
+*Fig 2. Storm-conditional t+6 RMSE. The aggregate-t+6 win is quiet/moderate driven, not a storm win.*
 
-### Storm-Conditional RMSE (BiLSTM, t+6)
+---
 
-| Condition | N | RMSE (nT) | Pearson r | R² |
-|---|---|---|---|---|
-| Quiet (Dst ≥ −20) | 25,414 | 8.0083 | 0.6084 | −0.016 |
-| Moderate (−50 ≤ Dst < −20) | 2,384 | 11.3049 | 0.4129 | −1.793 |
-| Intense (Dst < −50) | 145 | 20.6947 | 0.2737 | −4.386 |
+## 3. Where the model genuinely adds value
 
-### Comparison to Persistence Baseline
+### 3.1 Calibrated storm detection (the operational win)
 
-A key finding is that the model's value is concentrated at t+6 and during intense storms.
+A multi-task head (shared encoder + regression head + per-horizon P(Dst < -50) classifier; joint loss = weighted MSE + 200 x BCE) gives well-calibrated probabilities, something point-RMSE cannot capture.
 
-| Step | Persistence RMSE | BiLSTM+GRU RMSE | Skill |
-|---|---|---|---|
-| t+1 | 2.88 nT | 7.25 nT | −151.8% |
-| t+2 | 4.73 nT | 7.17 nT | −51.6% |
-| t+3 | 5.99 nT | 7.28 nT | −21.5% |
-| t+4 | 6.86 nT | 7.48 nT | −9.0% |
-| t+5 | 7.50 nT | 7.64 nT | −1.9% |
-| **t+6** | **8.01 nT** | **7.78 nT** | **+2.9%** |
-
-Storm-conditional at t+6: the model's real value is intense storm detection — **+29.3% skill** over persistence on Dst < −50 nT events.
-
-For a real-time system: output persistence for t+1–t+5, BiLSTM+GRU for t+6.
-
-![Forecast Plot](images/forecast_plot.png)
-![Scatter Plot](images/scatter_plot.png)
-![Major Storm Prediction](images/major_storm_plot.png)
-
-## 8. Key Findings
-
-1. **Data scarcity is the binding constraint.** With only ~145 intense storm samples in the validation set, loss reweighting and oversampling both fail to improve intense storm RMSE. More training data (e.g., OMNI historical storms) is the primary remaining lever.
-
-2. **Dst is strongly autocorrelated at short horizons.** Persistence dominates t+1–t+5 because Dst changes slowly in quiet conditions (91% of data). The model's advantage only emerges at t+6 and during storm onset.
-
-3. **Physics-derived features do not help.** Explicit coupling functions (Newell Φ, Perreault-Akasofu ε, vBs, clock angle) are redundant with the raw inputs the BiLSTM already sees — adding them increased t+6 RMSE by 0.16 nT.
-
-4. **Threshold-based switching fails at storm onset.** A hybrid rule routing quiet times to persistence and storms to the neural model cannot work because storm deepening at t+6 is not predicted by current Dst — the timing mismatch is structural.
-
-5. **GRU residual correction captures systematic bias.** The BiLSTM has a +3.15 nT mean positive bias (underpredicts Dst magnitude). The ResidualGRU corrects this in its first epoch, yielding a consistent 0.67–0.92 nT improvement across all steps.
-
-## 9. Saved Artifacts
-
-| File | Description |
+| Metric | Value |
 |---|---|
-| `solar_bilstm_model.pth` | Phase 2 BiLSTM weights (best checkpoint, RMSE 8.4531 nT) |
-| `gru_corrector.pth` | ResidualGRU weights (Phase 4) |
-| `solar_transformer_model.pth` | Transformer encoder weights (experimental) |
-| `per_step_rmse.png` | Per-step RMSE/Pearson/R² bar chart |
-| `storm_conditional_rmse.png` | Storm-conditional RMSE table |
+| AUC | 0.983 |
+| Brier score | 0.012 |
+| ECE | 0.003 |
 
-## 10. Conclusion
-This project demonstrates that a BiLSTM with temporal attention, asymmetric storm-weighted loss, and GRU residual correction achieves competitive Dst forecasting. The best single model (BiLSTM+GRU) reaches 7.78 nT RMSE at t+6 and +29.3% skill over persistence on intense storms. All algorithmic improvements — larger architecture, feature engineering, gradient clipping, GRU correction, LightGBM stacking — have been exhausted against the current training set. The remaining path to better intense storm prediction is OMNI historical data augmentation to address the data-scarcity ceiling.
+At a tunable alarm threshold tau = 0.30:
+
+| System | POD | CSI | HSS |
+|---|---|---|---|
+| Multi-task classifier | **0.713** | **0.573** | **0.721** |
+| Persistence | 0.695 | 0.533 | -- |
+| Deterministic model | 0.669 | 0.519 | -- |
+
+![Detection skill](figs/fig3_detection.png)
+
+*Fig 3. Detection skill vs alarm threshold. tau = 0.30 marked; classifier beats both persistence and the deterministic model on POD/CSI/HSS, and is Dst-independent.*
+
+### 3.2 Severity-adaptive uncertainty
+
+Mondrian conformal intervals binned by predicted severity give honest coverage, versus only 64.3 percent marginal coverage on intense storms. Width grows with lead time, a property single-horizon UQ cannot demonstrate.
+
+| Severity bin | 95% coverage | 95% full width (nT) |
+|---|---|---|
+| Quiet | 97.7% | 36.5 |
+| Moderate | 91.7% | 54.9 |
+| Intense | 82.9 to 90.4% | 107.5 |
+
+Marginal width: 40.0 nT at t+1 growing to 44.5 nT at t+6.
+
+![Uncertainty](figs/fig4_uq.png)
+
+*Fig 4. Marginal conformal width grows with lead time (left); Mondrian coverage by severity (right).*
+
+### 3.3 Dst-independent resilience
+
+Because the model never ingests Dst, it keeps forecasting when Dst telemetry is stale or absent, precisely when persistence fails. Robustness tests show degradation at most 1.1x at 10 percent input dropout, but a critical **2.05x** intense degradation under magnetometer outage, identifying magnetometer redundancy as the operational priority.
+
+---
+
+## 4. Only adopted accuracy lever: geomagnetic-index inputs (Phase J)
+
+Adding cadence-lagged Kp/ap/AE inputs (32 features) is the single modality that improves the model under 5-seed paired testing, all seeds positive.
+
+| Effect | Value |
+|---|---|
+| t+1 intense improvement | -21% (+4.84 +/- 1.53 nT, t-test p = 0.002) |
+| Profile | Front-loaded; decays to non-significant by t+6 |
+| Leakage control | Input-window-only + cadence-lag, verified by smooth lag-decay (no boundary cliff) |
+| Caveat | Still does not beat persistence on intense when live Dst exists; value is the Dst-stale regime; needs near-real-time indices (gain halves by ~3 h staleness) |
+
+This required recovering the anonymized MagNet absolute dates by Dst-fingerprint cross-correlation against OMNI hourly Dst.
+
+---
+
+## 5. Deployment system
+
+`solar_dst_inference.py` ships a routed real-time forecaster implementing the corrected policy:
+
+| Condition | Routing |
+|---|---|
+| Live Dst fresh | Persistence for t+1 to t+5 and t+6-intense; base model for t+6-aggregate |
+| Live Dst stale/absent | idx-model t+1 to t+3 (if near-real-time Kp/ap/AE), base for t+4 to t+6 |
+| Storm alarm | Multi-task classifier P(Dst < -50), threshold tau = 0.30 |
+| Uncertainty | Mondrian severity-adaptive 95% bands |
+| Monitors | Dst staleness, index staleness, magnetometer outage (intense bands widened 2.05x) |
+
+`DstForecaster.predict(window29, last_dst, dst_age_h, window32, index_age_h, mag_ok)` returns per-horizon Dst, source, 95% band, storm probability, and severity, plus a storm alert and monitor notes. Smoke-tested across 4 routing scenarios; base predictions reproduce the documented intense t+6 RMSE of 44.64 exactly.
+
+---
+
+## 6. Negative results (full ablation trail)
+
+All tested and rejected; none beat the base model on the held-out test.
+
+| Lever | Outcome |
+|---|---|
+| More OMNI storms (27 vs 15) | Regressed; curation beats count |
+| Longer windows (96/128 h) | No gain; 48 h optimal |
+| Conv1D / transformer encoders | Lost every horizon and regime |
+| Ensemble/stacking (LGBM, GRU) | Traded quiet gains for worse storms |
+| Persistence-model hybrid switching | Dead; both grid searches picked model ~5%, lost on intense |
+| Loss reweighting / oversampling | All failed; storm error is data-scarcity bound |
+| Physics-coupling features (vBs, clock-angle, epsilon, Newell) | Worse; redundant (confirmed by interpretability) |
+| Curated extreme storms (Dst < -200, ssn-matched) | Regressed vs 15-storm set |
+| SYM-H target (mean or min) | Rejected; relabel trivial or trade already buyable via threshold sweep |
+| CME + GOES flares + F10.7 inputs | Probe passed ~2x lift but regressed as input; signal too weak/sparse |
+
+**Accuracy lever exhausted:** the only untried modality, raw SDO/AIA imagery, launched in 2010 and cannot cover the recovered 1998/2004 test periods, so it is physically dead for this dataset.
+
+**Interpretability (integrated gradients):** top features are Bz, speed, theta, Bt; on storm rows Bt + Bz + speed dominate, exactly the Dst-driving physics. The last 6 hours carry the bulk of attribution (|IG| at t-1 is 12.4x t-48), which echoes the autocorrelation persistence exploits and explains why hand-crafted coupling transforms were redundant.
+
+---
+
+## 7. A discrepancy, resolved
+
+A blocked 10-fold cross-validation (Phase E) reported intense base minus persistence +5.12 nT (Wilcoxon p = 0.007), suggesting the model beats persistence on storms. This does **not** transfer to the fixed held-out test, where persistence wins intense at every horizon. The CV blocks are storm-rich, all-horizon-averaged, and use less training data per fold, so they are not directly comparable. We report the fixed-test result as deploy-relevant and present the CV only as a caveated robustness check. Base predictions reproduce the documented test numbers exactly (t+6 aggregate 11.26, intense 44.64), confirming the comparison.
+
+---
+
+## 8. vs TriQXNet (arXiv:2407.06658v3)
+
+Same dataset, features, and split. Our t+1 is 10.14 nT vs their reported 9.27, but their number is a t0/t+1 average where t0 is a trivial quiet-dominated nowcast; on extremes they hit 20.33/20.86. The gap is neither window length nor architecture, but their 3-pipeline ensemble plus a t0-inflated metric. We add multi-horizon forecasting, honest storm-conditional evaluation, per-horizon uncertainty, and calibrated detection, which they lack.
+
+---
+
+## 9. Repository layout
+
+| File | Purpose |
+|---|---|
+| `SolarWindLSTM.ipynb` | Full pipeline: load, preprocess, train, evaluate, all phases A to O |
+| `solar_dst_inference.py` | Production routed real-time forecaster |
+| `_smoke_inference.py` | Smoke test for the inference module |
+| `_paper_figs.py` | Regenerates `figs/fig1..4.png` from result CSVs |
+| `_phase_n_verify.py` | Reproduces base/aug predictions and the persistence comparison |
+| `PAPER_DRAFT.md`, `PAPER_NOTES.md` | Full paper draft and notes |
+| `figs/` | Figures 1 to 4 |
+| `archive/` | `solar_wind.csv`, `labels.csv`, `sunspots.csv` (auto-downloads full MagNet from Zenodo if needed) |
+
+### Run
+
+```bash
+jupyter nbconvert --to notebook --execute SolarWindLSTM.ipynb   # full pipeline
+python _paper_figs.py                                           # regenerate figures
+python _smoke_inference.py                                      # verify inference routing
+```
+
+Environment: conda `dnn` (torch 2.9.1, crepes 0.9.0, lightgbm). Best weights write `solar_bilstm_model.pth` on validation-loss improvement.
+
+---
+
+## 10. Takeaway
+
+The honest answer to "does the model beat persistence?" is: not on storm point error, and not because the model is weak, but because Dst autocorrelation makes persistence a hard baseline a Dst-blind model cannot exceed. The right contributions of a solar-wind-only system are **Dst-independent forecasting, calibrated storm detection, and adaptive uncertainty**, measured per-horizon and per-regime. This reframing is the central value of the work.

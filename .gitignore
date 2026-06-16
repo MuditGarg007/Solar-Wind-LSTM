@@ -20,6 +20,12 @@ archive/
 *.zip
 *.csv
 *.pdf
+*.npz
+*.pkl
+*.bak
+*.bak[0-9]
+*.bak_*
+CLAUDE.original.md
 
 # Model weights (Large binary files)
 *.pth
