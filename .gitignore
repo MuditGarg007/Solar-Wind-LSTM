@@ -15,6 +15,10 @@ ENV/
 .virtual_documents
 */.ipynb_checkpoints/*
 
+# Scratch logs and analysis dumps
+*.log
+_nb_analysis.txt
+
 # Data and Large Binaries (Don't track large CSVs or ZIPs)
 archive/
 *.zip
